@@ -218,6 +218,7 @@ struct mips_set_options
   int ase_dsp;
   int ase_dspr2;
   int ase_mt;
+  int ase_mxu;
   int ase_mcu;
   /* Whether we are assembling for the mips16 processor.  0 if we are
      not, 1 if we are, and -1 if the value has not been initialized.
@@ -293,7 +294,7 @@ static struct mips_set_options mips_opts =
 {
   /* isa */ ISA_UNKNOWN, /* ase_mips3d */ -1, /* ase_mdmx */ -1,
   /* ase_smartmips */ 0, /* ase_dsp */ -1, /* ase_dspr2 */ -1, /* ase_mt */ -1,
-  /* ase_mcu */ -1, /* mips16 */ -1, /* micromips */ -1, /* noreorder */ 0,
+  /* ase_mxu*/ -1, /* ase_mcu */ -1, /* mips16 */ -1, /* micromips */ -1, /* noreorder */ 0,
   /* at */ ATREG, /* warn_about_macros */ 0, /* nomove */ 0, /* nobopt */ 0,
   /* noautoextend */ 0, /* gp32 */ 0, /* fp32 */ 0, /* arch */ CPU_UNKNOWN,
   /* sym32 */ FALSE, /* soft_float */ FALSE, /* single_float */ FALSE
@@ -349,6 +350,9 @@ static int file_ase_smartmips;
 /* True if -mdsp was passed or implied by arguments passed on the
    command line (e.g., by -march).  */
 static int file_ase_dsp;
+
+/* True if -mmxu was passed.  */
+static int file_ase_mxu;
 
 #define ISA_SUPPORTS_DSP_ASE (mips_opts.isa == ISA_MIPS32R2		\
 			      || mips_opts.isa == ISA_MIPS64R2		\
@@ -1387,6 +1391,7 @@ struct mips_cpu_info
 #define MIPS_CPU_ASE_MDMX	0x0020	/* CPU implements MDMX ASE */
 #define MIPS_CPU_ASE_DSPR2	0x0040	/* CPU implements DSP R2 ASE */
 #define MIPS_CPU_ASE_MCU	0x0080	/* CPU implements MCU ASE */
+#define MIPS_CPU_ASE_MXU	0x0100	/* CPU implements MXU ASE */
 
 static const struct mips_cpu_info *mips_parse_cpu (const char *, const char *);
 static const struct mips_cpu_info *mips_cpu_info_from_isa (int);
@@ -1827,12 +1832,45 @@ init_vr4120_conflicts (void)
 #undef CONFLICT
 }
 
+struct args {
+       const char *opt;
+       char *value;
+};
+
+const struct args args_opt[] = {
+       {"WW", "0"},
+       {"LW", "1"},
+       {"HW", "2"},
+       {"XW", "3"},
+       {"0", "0"},
+       {"1", "1"},
+       {"2", "2"},
+       {"3", "3"},
+};
+const struct args args_apt[] = {
+       {"AA", "0"},
+       {"AS", "1"},
+       {"SA", "2"},
+       {"SS", "3"}
+};
+
+const struct args args_ept[] = {
+       {"ptn0", "0"},
+       {"ptn1", "1"},
+       {"ptn2", "2"},
+       {"ptn3", "3"},
+       {"ptn4", "4"},
+       {"ptn5", "5"},
+       {"ptn6", "6"},
+       {"ptn7", "7"},
+};
+
 struct regname {
   const char *name;
   unsigned int num;
 };
 
-#define RTYPE_MASK	0x1ff00
+#define RTYPE_MASK	0x3ff00
 #define RTYPE_NUM	0x00100
 #define RTYPE_FPU	0x00200
 #define RTYPE_FCC	0x00400
@@ -1842,6 +1880,7 @@ struct regname {
 #define RTYPE_PC	0x04000
 #define RTYPE_ACC	0x08000
 #define RTYPE_CCC	0x10000
+#define RTYPE_JZ	0x20000
 #define RNUM_MASK	0x000ff
 #define RWARN		0x80000
 
@@ -2035,6 +2074,25 @@ struct regname {
     {"$ac2",	RTYPE_ACC | 2}, \
     {"$ac3",	RTYPE_ACC | 3}
 
+#define MIPS32_JZ_REGISTER_NAMES \
+    {"xr0",    RTYPE_JZ | 0},  \
+    {"xr1",    RTYPE_JZ | 1},  \
+    {"xr2",    RTYPE_JZ | 2},  \
+    {"xr3",    RTYPE_JZ | 3},  \
+    {"xr4",    RTYPE_JZ | 4},  \
+    {"xr5",    RTYPE_JZ | 5},  \
+    {"xr6",    RTYPE_JZ | 6},  \
+    {"xr7",    RTYPE_JZ | 7},  \
+    {"xr8",    RTYPE_JZ | 8},  \
+    {"xr9",    RTYPE_JZ | 9},  \
+    {"xr10",   RTYPE_JZ | 10}, \
+    {"xr11",   RTYPE_JZ | 11}, \
+    {"xr12",   RTYPE_JZ | 12}, \
+    {"xr13",   RTYPE_JZ | 13}, \
+    {"xr14",   RTYPE_JZ | 14}, \
+    {"xr15",   RTYPE_JZ | 15}, \
+    {"xr16",   RTYPE_JZ | 16}
+
 static const struct regname reg_names[] = {
   GENERIC_REGISTER_NUMBERS,
   FPU_REGISTER_NAMES,
@@ -2050,6 +2108,7 @@ static const struct regname reg_names[] = {
   MIPS16_SPECIAL_REGISTER_NAMES,
   MDMX_VECTOR_REGISTER_NAMES,
   MIPS_DSP_ACCUMULATOR_NAMES,
+  MIPS32_JZ_REGISTER_NAMES,
   {0, 0}
 };
 
@@ -2190,6 +2249,8 @@ is_opcode_valid (const struct mips_opcode *mo)
   int isa = mips_opts.isa;
   int fp_s, fp_d;
 
+  if (mips_opts.ase_mxu)
+    isa |= INSN_MXU;
   if (mips_opts.ase_mdmx)
     isa |= INSN_MDMX;
   if (mips_opts.ase_dsp)
@@ -10314,6 +10375,70 @@ validate_mips_insn (const struct mips_opcode *opc)
       case '\\': USE_BITS (OP_MASK_3BITPOS,	OP_SH_3BITPOS);	break;
       case '~': USE_BITS (OP_MASK_OFFSET12,	OP_SH_OFFSET12); break;
       case 'g': USE_BITS (OP_MASK_RD,		OP_SH_RD);	break;
+
+/************** JZ SPECIAL ISA **************/
+      /* m and n is used for S32M2I and S32I2M */
+      case 'm': USE_BITS (OP_MASK_RA,		OP_SH_RA);      break;
+      case '=': USE_BITS (OP_MASK_XRA,		OP_SH_XRA);
+	while (*p)
+	  switch (*p++)
+	    {
+	    case ',': break;
+	    case 'a': USE_BITS (OP_MASK_LPTN2,      OP_SH_LPTN2);   break;
+	    case 'b': USE_BITS (OP_MASK_XRB,        OP_SH_XRB);     break;
+	    case 'c': USE_BITS (OP_MASK_XRC,        OP_SH_XRC);     break;
+	    case 'd': USE_BITS (OP_MASK_XRD,        OP_SH_XRD);     break;
+	    case 'e': USE_BITS (OP_MASK_EPTN3,      OP_SH_EPTN3);   break;
+	    case 'f': USE_BITS (OP_MASK_SFT4,       OP_SH_SFT4);    break;
+	    case 'i': USE_BITS (OP_MASK_XIM12,      OP_SH_XIM12);   break;
+	    case 'q':
+	    case 'o': USE_BITS (OP_MASK_RPTN2,      OP_SH_RPTN2);   break;
+	    case 'P':
+	    case 'p': USE_BITS (OP_MASK_PTN,        OP_SH_PTN);     break;
+	    case 'r': USE_BITS (OP_MASK_LSTRD2,     OP_SH_LSTRD2);  break;
+	    case 's': USE_BITS (OP_MASK_RS,         OP_SH_RS);      break;
+	    case 't': USE_BITS (OP_MASK_RT,         OP_SH_RT);      break;
+	    case 'A': USE_BITS (OP_MASK_XAS,        OP_SH_XAS);     break;
+	    case 'U':
+	    case 'B': USE_BITS (OP_MASK_XIM8,       OP_SH_XIM8);    break;
+	    case 'E': USE_BITS (OP_MASK_LPTN2,      OP_SH_LPTN2);   break;
+	    case 'I': USE_BITS (OP_MASK_XIM10,      OP_SH_XIM10);   break;
+	    case 'O': USE_BITS (OP_MASK_OPTN3,      OP_SH_OPTN3);   break;
+	    case 'S': USE_BITS (OP_MASK_XRS,        OP_SH_XRS);     break;
+	    case 'T': USE_BITS (OP_MASK_RT,         OP_SH_RT);      break;
+	    default:
+	      as_bad (_("internal: bad mips opcode (unknown operand type `%c'): %s %s"), c, opc->name, opc->args);
+	      return 0;
+	    }
+	break;
+
+      case 'n': USE_BITS (OP_MASK_RD,          OP_SH_RD);
+	while (*p)
+	  switch(*p++)
+	    {
+	    case ',': break;
+	    case 's': USE_BITS (OP_MASK_RS,         OP_SH_RS);      break;
+	    case 't': USE_BITS (OP_MASK_RT,         OP_SH_RT);      break;
+	    case 'R': USE_BITS (OP_MASK_RSTRD2,     OP_SH_RSTRD2);  break;
+	    default:
+	      as_bad (_("internal: bad mips opcode (unknown operand type `%c'): %s %s"), c, opc->name, opc->args);
+	      return 0;
+	    }
+	break;
+
+      case 'y': USE_BITS (OP_MASK_XRB,         OP_SH_XRB);
+	while (*p)
+	  switch (*p++)
+	    {
+	    case ',': break;
+	    case 'D': USE_BITS (OP_MASK_XRC,        OP_SH_XRC);     break;
+	    case 's': USE_BITS (OP_MASK_RS,         OP_SH_RS);      break;
+	    default:
+	      as_bad (_("internal: bad mips opcode (unknown operand type `%c'): %s %s"), c, opc->name, opc->args);
+	      return 0;
+	    }
+	break;
+
       default:
 	as_bad (_("internal: bad mips opcode (unknown operand type `%c'): %s %s"),
 		c, opc->name, opc->args);
@@ -11753,7 +11878,86 @@ mips_ip (char *str, struct mips_cl_insn *ip)
 	      break;
 
 	    case 'y':		/* ALNV.PS source register.  */
-	      gas_assert (mips_opts.micromips);
+	      if (!mips_opts.micromips)
+		{
+	      for (; ; args++) {
+		switch (*args) {
+			/* end of args */
+			case '\0':
+				if (*s == '\0')
+					return;
+				break;
+			case ',':
+				if (*s++ == *args)
+					continue;
+				break;
+
+			case 'y':
+			case 'D':
+			case 's':
+				s_reset = s;
+				if (*args == 's') {
+					rtype = RTYPE_NUM | RTYPE_GP;
+					ok = reg_lookup (&s, rtype, &regno);
+                 			if (regno == AT && mips_opts.at)
+	                    		{
+        	              			if (mips_opts.at == ATREG)
+				                       	as_warn (_("used $at without \".set noat\""));
+						else
+                        				as_warn (_("used $%u with \".set at=$%u\""),
+                                				regno, mips_opts.at);
+	                    		}
+				} else {
+					rtype = RTYPE_JZ | RTYPE_GP;
+					ok = reg_lookup (&s, rtype, &regno);
+					if (!ok)
+						break;
+					if (regno > 15) {
+						as_bad (_("regno out of range(%d)\n"), regno);
+						internalError ();
+					}
+				}
+				if (ok)
+				{
+					c = *args;
+					if (*s == ' ')
+						++s;
+					if (args[1] != *s)
+					{
+						if (c == 'r' || c == 'v' || c == 'w')
+						{
+							regno = lastregno;
+							s = s_reset;
+							++args;
+						}
+					}
+					/* Now that we have assembled one operand, we use the args string
+					 * to figure out where it goes in the instruction.  */
+					switch (c)
+					{
+						case 'y':
+							INSERT_OPERAND (0, XRB, *ip, regno);
+							break;
+						case 'D':
+							INSERT_OPERAND (0, XRC, *ip, regno);
+							break;
+						case 's':
+							INSERT_OPERAND (0, RS, *ip, regno);
+							break;
+					}
+					lastregno = regno;
+					continue;
+				}
+				break;
+			default:
+				as_bad (_("bad char = '%c'\n"), *args);
+				internalError ();
+		}
+		break;
+	      }
+	      break;
+		}
+
 	      goto do_reg;
 	    case 'x':		/* Ignore register name.  */
 	    case 'U':           /* Destination register (CLO/CLZ).  */
@@ -12427,7 +12631,15 @@ mips_ip (char *str, struct mips_cl_insn *ip)
 	      continue;
 
 	    case 'm':		/* Opcode extension character.  */
-	      gas_assert (mips_opts.micromips);
+	      if (!mips_opts.micromips)
+	        {
+		  /* JZ S32M2I and JZS32I2M special command */
+		  if (!reg_lookup (&s, RTYPE_NUM | RTYPE_JZ, &regno))
+		    break;
+
+		  INSERT_OPERAND (0, RA, *ip, regno);
+		  continue;
+	        }
 	      c = *++args;
 	      switch (c)
 		{
@@ -13135,7 +13347,80 @@ mips_ip (char *str, struct mips_cl_insn *ip)
 	      break;
 
 	    case 'n':		/* Register list for 32-bit lwm and swm.  */
-	      gas_assert (mips_opts.micromips);
+	      if (!mips_opts.micromips)
+		{
+	      for (; ; args++) {
+		switch (*args) {
+			/* end of args */
+			case '\0':
+				if (*s == '\0')
+					return;
+				break;
+			case ',':
+				if (*s++ == *args)
+					continue;
+				break;
+
+			case 'R':		/* rstrd2  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+
+				/* the range of strd2 from 0 to 2 */
+				if ((unsigned long) imm_expr.X_add_number > 0x2)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, RSTRD2, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'n':
+			case 's':
+			case 't':
+				s_reset = s;
+				ok = reg_lookup (&s, RTYPE_NUM | RTYPE_GP, &regno);
+                 		if (regno == AT && mips_opts.at)
+                    		{
+                      			if (mips_opts.at == ATREG)
+			                       	as_warn (_("used $at without \".set noat\""));
+					else
+                        			as_warn (_("used $%u with \".set at=$%u\""),
+                                			regno, mips_opts.at);
+                    		}
+				if (ok)
+				{
+					c = *args;
+					if (*s == ' ')
+						++s;
+
+				/* Now that we have assembled one operand, we use the args string
+					 * to figure out where it goes in the instruction.  */
+					switch (c)
+					{
+						case 'n':
+							INSERT_OPERAND (0, RD, *ip, regno);
+							break;
+						case 's':
+							INSERT_OPERAND (0, RS, *ip, regno);
+							break;
+						case 't':
+							INSERT_OPERAND (0, RT, *ip, regno);
+							break;
+					}
+					lastregno = regno;
+					continue;
+				}
+				break;
+			default:
+				as_bad (_("bad char = '%c'\n"), *args);
+				internalError ();
+		}
+		break;
+	      }
+	      break;
+		}
+
 	      {
 		/* A comma-separated list of registers and/or
 		   dash-separated contiguous ranges including
@@ -13185,6 +13470,413 @@ mips_ip (char *str, struct mips_cl_insn *ip)
 	      imm_expr.X_op = O_absent;
 	      s = expr_end;
 	      continue;
+
+/**************	JZ SPECIAL ISA	****************/ /* S32MTI and S32I2M is added by 'm', 'n' above */
+
+	    case '=':
+	      for (; ; args++) {
+		      int i;
+		      char tmp[8];
+		      char *p = tmp;
+		      switch (*args) {
+			/* end of args */
+			case '\0':
+				if (*s == '\0')
+					return;
+				break;
+			case ',':
+				if (*s++ == *args)
+					continue;
+				break;
+
+			case 'a':
+				/* phrase the aptn */
+				strcpy(tmp, s);
+				p = strtok(tmp, ",");
+				for (i = 0; i < 4; i++)
+					if (!strcmp(p, args_apt[i].opt)) {
+						s += 2;
+						strcpy(tmp, args_apt[i].value);
+						break;
+					}
+				if (i == 4) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+				s = strcat(tmp, s);
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > OP_MASK_RPTN2)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, LPTN2, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'f':		/* SFT4  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > OP_MASK_SFT4)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, SFT4, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'e':		/* eptn3  */
+				for (i = 0; i < 8; i++) {
+					if (!strcmp(args_ept[i].opt, s)) {
+						s = args_ept[i].value;
+						break;
+					}
+				}
+				if (i == 8) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > OP_MASK_EPTN3)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, EPTN3, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+
+			case 'i':		/* s[12:2]  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				/* the immediate must be fully divisioned by 4 */
+				if ((signed long) imm_expr.X_add_number % 4 != 0 )
+					as_bad (_("bad immediate = '%s'\n"), s);
+				/* the immediate must not be out of range */
+				if ((signed long) imm_expr.X_add_number > 2044 ||
+					(signed long)imm_expr.X_add_number < -2048)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(signed long) imm_expr.X_add_number);
+				/* the bit in the command express multiple by 4 */
+				INSERT_OPERAND (0, XIM12, *ip, (imm_expr.X_add_number >> 2) & 0x3ff);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'o':		/* OPTN2  */
+			case 'q':		/* s16mad, OPTN2  */
+				for (i = 0; i < 8; i++)
+					if (!strcmp(args_opt[i].opt, s)) {
+						s = args_opt[i].value;
+						break;
+					}
+				if (i == 8) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > OP_MASK_RPTN2)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, RPTN2, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'p': 	/* ptn  */
+				for (i = 0; i < 4; i++)
+					if (!strcmp(args_ept[i].opt, s)) {
+						s = args_ept[i].value;
+						break;
+					}
+				if (i == 4) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+
+				/* the range of strd2 from 0 to 1 */
+				if ((unsigned long) imm_expr.X_add_number > 0x1)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, PTN, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'P': 	/* ptn  */
+				for (i = 0; i < 4; i++)
+					if (!strcmp(args_ept[i].opt, s)) {
+						s = args_ept[i].value;
+						break;
+					}
+				if (i == 4) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+
+				/* the range of strd2 from 0 to 1 */
+				if ((unsigned long) imm_expr.X_add_number > 0x3)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, PTN, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'r':		/* lstrd2  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+
+				/* the range of strd2 from 0 to 2 */
+				if ((unsigned long) imm_expr.X_add_number > 0x2)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, LSTRD2, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'A':		/* special s32mad command  */
+				strcpy(tmp, s);
+				p = strtok(tmp, ",");
+				if (strcmp(p, "A") && strcmp(p, "S")) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+				if (*s == 'S')
+					*s = '1';
+				else if (*s == 'A')
+					*s = '0';
+				my_getExpression (&imm_expr, s);
+				INSERT_OPERAND (0, XAS, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'B':		/* s8[7:0]  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				/* the immediate must not be out of range */
+				if ((signed long) imm_expr.X_add_number > 127 ||
+					(signed long)imm_expr.X_add_number < -128)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(signed long) imm_expr.X_add_number);
+				/* the bit in the command express multiple by 4 */
+				INSERT_OPERAND (0, XIM8, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'U':		/* u8[7:0]  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				/* the immediate must not be out of range */
+				if ((signed long) imm_expr.X_add_number > 255 ||
+					(signed long)imm_expr.X_add_number < -128)
+                                        as_bad (_("Code (%c) for %s not in range (%ld)"), *args,
+							ip->insn_mo->name,
+							(signed long) imm_expr.X_add_number);
+				/* the bit in the command express multiple by 4 */
+				INSERT_OPERAND (0, XIM8, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'E':	/* phrase the s32sfl(aptn) */
+				for (i = 0; i < 4; i++)
+					if (!strcmp(args_ept[i].opt, s)) {
+						s = args_ept[i].value;
+						break;
+					}
+				if (i == 4) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > 0x3)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, LPTN2, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'I':		/* s10[9:1]  */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				/* the immediate must be fully divisioned by 4 */
+				if ((signed long) imm_expr.X_add_number % 2 != 0 )
+					as_bad (_("bad immediate = '%s'\n"), s);
+				/* the immediate must not be out of range */
+				if ((signed long) imm_expr.X_add_number > 510 ||
+					(signed long)imm_expr.X_add_number < -512)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(signed long) imm_expr.X_add_number);
+				/* the bit in the command express multiple by 2 */
+				INSERT_OPERAND (0, XIM10, *ip, (imm_expr.X_add_number >> 1));
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'O':		/* optn3  */
+				for (i = 0; i < 8; i++) {
+					if (!strcmp(args_ept[i].opt, s)) {
+						s = args_ept[i].value;
+						break;
+					}
+				}
+				if (i == 8) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > OP_MASK_OPTN3)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, OPTN3, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case 'S':		/* s3[2:0]  */
+				for (i = 0; i < 4; i++)
+					if (!strcmp(args_ept[i].opt, s)) {
+						s = args_ept[i].value;
+						break;
+					}
+				if (i == 4) {
+					as_bad (_("bad command args = '%s'\n"), s);
+					internalError ();
+				}
+
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > 0x4)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, XRS, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+
+
+			case 'T':		/* bits5 */
+				my_getExpression (&imm_expr, s);
+				check_absolute_expr (ip, &imm_expr);
+				if ((unsigned long) imm_expr.X_add_number > OP_MASK_RT)
+                                        as_bad (_("Code (%c) for %s not in range (%lu)"), *args,
+							ip->insn_mo->name,
+							(unsigned long) imm_expr.X_add_number);
+				INSERT_OPERAND (0, RT, *ip, imm_expr.X_add_number);
+				imm_expr.X_op = O_absent;
+				s = expr_end;
+				continue;
+
+			case '=':
+			case 'b':
+			case 'c':
+			case 'd':
+			case 's':
+			case 't':
+				s_reset = s;
+				if (*args == 's' || *args == 't') {
+					rtype = RTYPE_NUM | RTYPE_GP;
+					ok = reg_lookup (&s, rtype, &regno);
+                 			if (regno == AT && mips_opts.at)
+                    			{
+                      				if (mips_opts.at == ATREG)
+			                        	as_warn (_("used $at without \".set noat\""));
+						else
+                        				as_warn (_("used $%u with \".set at=$%u\""),
+                                 				regno, mips_opts.at);
+                    			}
+				} else {
+					rtype = RTYPE_JZ | RTYPE_GP;
+					ok = reg_lookup (&s, rtype, &regno);
+					if (!ok)
+						break;
+					if (regno > 15) {
+						as_bad (_("regno out of range(%d)\n"), regno);
+						internalError ();
+					}
+				}
+				if (ok)
+				{
+					c = *args;
+					if (*s == ' ')
+						++s;
+					if (args[1] != *s)
+					{
+						if (c == 'r' || c == 'v' || c == 'w')
+						{
+							regno = lastregno;
+							s = s_reset;
+							++args;
+						}
+					}
+					/* Now that we have assembled one operand, we use the args string
+					 * to figure out where it goes in the instruction.  */
+					switch (c)
+					{
+						/* '=' 'b' 'c' 'd' express jz special register XRA XRB XRC XRD */
+						case '=':
+							INSERT_OPERAND (0, XRA, *ip, regno);
+							break;
+						case 'b':
+							INSERT_OPERAND (0, XRB, *ip, regno);
+							break;
+						case 'c':
+							INSERT_OPERAND (0, XRC, *ip, regno);
+							break;
+						case 'd':
+							INSERT_OPERAND (0, XRD, *ip, regno);
+							break;
+						/* regular register s and t*/
+						case 's':
+							INSERT_OPERAND (0, RS, *ip, regno);
+							break;
+						case 't':
+							INSERT_OPERAND (0, RT, *ip, regno);
+							break;
+					}
+					lastregno = regno;
+					continue;
+				}
+				break;
+			default:
+				as_bad (_("bad char = '%c'\n"), *args);
+				internalError ();
+		}
+		break;
+	      }
+	      break;
 
 	    default:
 	      as_bad (_("Bad char = '%c'\n"), *args);
@@ -14298,6 +14990,8 @@ enum options
     OPTION_NO_DSP,
     OPTION_MT,
     OPTION_NO_MT,
+    OPTION_MXU,
+    OPTION_NO_MXU,
     OPTION_SMARTMIPS,
     OPTION_NO_SMARTMIPS,
     OPTION_DSPR2,
@@ -14394,6 +15088,8 @@ struct option md_longopts[] =
   {"mno-dsp", no_argument, NULL, OPTION_NO_DSP},
   {"mmt", no_argument, NULL, OPTION_MT},
   {"mno-mt", no_argument, NULL, OPTION_NO_MT},
+  {"mmxu", no_argument, NULL, OPTION_MXU},
+  {"mno-mxu", no_argument, NULL, OPTION_NO_MXU},
   {"msmartmips", no_argument, NULL, OPTION_SMARTMIPS},
   {"mno-smartmips", no_argument, NULL, OPTION_NO_SMARTMIPS},
   {"mdspr2", no_argument, NULL, OPTION_DSPR2},
@@ -14646,6 +15342,14 @@ md_parse_option (int c, char *arg)
     case OPTION_NO_DSPR2:
       mips_opts.ase_dspr2 = 0;
       mips_opts.ase_dsp = 0;
+      break;
+
+    case OPTION_MXU:
+      mips_opts.ase_mxu = 1;
+      break;
+
+    case OPTION_NO_MXU:
+      mips_opts.ase_mxu = 0;
       break;
 
     case OPTION_MT:
@@ -15172,12 +15876,16 @@ mips_after_parse_args (void)
       as_warn (_("%s ISA does not support MCU ASE"),
 	       mips_cpu_info_from_isa (mips_opts.isa)->name);
 
+  if (mips_opts.ase_mxu == -1)
+    mips_opts.ase_mxu = (arch_info->flags & MIPS_CPU_ASE_MXU) ? 1 : 0;
+
   file_mips_isa = mips_opts.isa;
   file_ase_mips3d = mips_opts.ase_mips3d;
   file_ase_mdmx = mips_opts.ase_mdmx;
   file_ase_smartmips = mips_opts.ase_smartmips;
   file_ase_dsp = mips_opts.ase_dsp;
   file_ase_dspr2 = mips_opts.ase_dspr2;
+  file_ase_mxu = mips_opts.ase_mxu;
   file_ase_mt = mips_opts.ase_mt;
   mips_opts.gp32 = file_mips_gp32;
   mips_opts.fp32 = file_mips_fp32;
@@ -16224,6 +16932,10 @@ s_mipsset (int x ATTRIBUTE_UNUSED)
     }
   else if (strcmp (name, "nomt") == 0)
     mips_opts.ase_mt = 0;
+  else if (strcmp (name, "mxu") == 0)
+    mips_opts.ase_mxu = 1;
+  else if (strcmp (name, "nomxu") == 0)
+    mips_opts.ase_mxu = 0;
   else if (strcmp (name, "mcu") == 0)
     mips_opts.ase_mcu = 1;
   else if (strcmp (name, "nomcu") == 0)
@@ -19408,6 +20120,9 @@ MIPS options:\n\
   fprintf (stream, _("\
 -mmcu			generate MCU instructions\n\
 -mno-mcu		do not generate MCU instructions\n"));
+  fprintf (stream, _("\
+-mmxu			generate MXU instructions\n\
+-mno-mxu		do not generate MXU instructions\n"));
   fprintf (stream, _("\
 -mfix-loongson2f-jump	work around Loongson2F JUMP instructions\n\
 -mfix-loongson2f-nop	work around Loongson2F NOP errata\n\

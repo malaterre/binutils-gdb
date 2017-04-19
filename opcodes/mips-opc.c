@@ -179,6 +179,9 @@
 /* MIPS MCU (MicroController) ASE support.  */
 #define MC	INSN_MCU
 
+/* Ingenic MXU ASE support.  */
+#define MXU	INSN_MXU
+
 /* The order of overloaded instructions matters.  Label arguments and
    register arguments look the same. Instructions that can have either
    for arguments must apear in the correct order in this table for the
@@ -972,8 +975,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"mfc0",    "t,G",	0x40000000, 0xffe007ff,	LCD|WR_t|RD_C0,		0,		I1	},
 {"mfc0",    "t,+D",0x40000000, 0xffe007f8,	LCD|WR_t|RD_C0,		0,		I32	},
 {"mfc0",    "t,G,H",	0x40000000, 0xffe007f8,	LCD|WR_t|RD_C0,		0,		I32	},
+{"mfc1",    "t,S",	0x44000002, 0xffe007ff,	LCD|WR_t|RD_S|FP_S,	0,		MXU	},
+{"mfc1",    "t,G",	0x44000002, 0xffe007ff,	LCD|WR_t|RD_S|FP_S,	0,		MXU	},
 {"mfc1",    "t,S",	0x44000000, 0xffe007ff,	LCD|WR_t|RD_S|FP_S,	0,		I1	},
 {"mfc1",    "t,G",	0x44000000, 0xffe007ff,	LCD|WR_t|RD_S|FP_S,	0,		I1	},
+{"mfhc1",   "t,S",	0x44600002, 0xffe007ff,	LCD|WR_t|RD_S|FP_D,	0,		MXU	},
+{"mfhc1",   "t,G",	0x44600002, 0xffe007ff,	LCD|WR_t|RD_S|FP_D,	0,		MXU	},
 {"mfhc1",   "t,S",	0x44600000, 0xffe007ff,	LCD|WR_t|RD_S|FP_D,	0,		I33	},
 {"mfhc1",   "t,G",	0x44600000, 0xffe007ff,	LCD|WR_t|RD_S|FP_D,	0,		I33	},
 /* mfc2 is at the bottom of the table.  */
@@ -1053,8 +1060,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"mtc0",    "t,G",	0x40800000, 0xffe007ff,	COD|RD_t|WR_C0|WR_CC,	0,		I1	},
 {"mtc0",    "t,+D",	0x40800000, 0xffe007f8,	COD|RD_t|WR_C0|WR_CC,	0,		I32	},
 {"mtc0",    "t,G,H",	0x40800000, 0xffe007f8,	COD|RD_t|WR_C0|WR_CC,	0,		I32	},
+{"mtc1",    "t,S",	0x44800002, 0xffe007ff,	COD|RD_t|WR_S|FP_S,	0,		MXU	},
+{"mtc1",    "t,G",	0x44800002, 0xffe007ff,	COD|RD_t|WR_S|FP_S,	0,		MXU	},
 {"mtc1",    "t,S",	0x44800000, 0xffe007ff,	COD|RD_t|WR_S|FP_S,	0,		I1	},
 {"mtc1",    "t,G",	0x44800000, 0xffe007ff,	COD|RD_t|WR_S|FP_S,	0,		I1	},
+{"mthc1",   "t,S",	0x44e00002, 0xffe007ff,	COD|RD_t|WR_S|FP_D,	0,		MXU	},
+{"mthc1",   "t,G",	0x44e00002, 0xffe007ff,	COD|RD_t|WR_S|FP_D,	0,		MXU	},
 {"mthc1",   "t,S",	0x44e00000, 0xffe007ff,	COD|RD_t|WR_S|FP_D,	0,		I33	},
 {"mthc1",   "t,G",	0x44e00000, 0xffe007ff,	COD|RD_t|WR_S|FP_D,	0,		I33	},
 /* mtc2 is at the bottom of the table.  */
@@ -1549,6 +1560,9 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"yield",   "d,s",	0x7c000009, 0xfc1f07ff, NODS|WR_d|RD_s,		0,		MT32	},
 {"zcb",     "(b)",	0x7000071f, 0xfc1fffff, SM|RD_b,		0,		IOCT2   },
 {"zcbt",    "(b)",	0x7000075f, 0xfc1fffff, SM|RD_b,		0,		IOCT2   },
+
+/********************** JS SPECIAL ISA  ********************************/
+#include "mxu-opc.c"
 
 /* User Defined Instruction.  */
 {"udi0",     "s,t,d,+1",0x70000010, 0xfc00003f,	WR_d|RD_s|RD_t,		0,		I33	},

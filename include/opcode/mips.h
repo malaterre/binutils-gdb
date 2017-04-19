@@ -328,6 +328,60 @@
 #define OP_MASK_IMMY		0
 #define OP_SH_IMMY		0
 
+/********** JZ SPECIAL ISA *************/
+#define OP_MASK_XRA             0xf
+#define OP_SH_XRA               6
+#define OP_MASK_XRB             0xf
+#define OP_SH_XRB               10
+#define OP_MASK_XRC             0xf
+#define OP_SH_XRC               14
+#define OP_MASK_XRD             0xf
+#define OP_SH_XRD               18
+
+/* special s32mad */
+#define OP_MASK_XAS             0x1
+#define OP_SH_XAS               24
+
+/* aptn2 optn2 eptn2  optn3 eptn3 sft4 strd2(1|2) S3[2:0] ptn*/
+#define OP_MASK_RPTN2           0x3
+#define OP_SH_RPTN2             22
+#define OP_MASK_LPTN2           0x3
+#define OP_SH_LPTN2             24
+#define OP_MASK_LSTRD2          0x3
+#define OP_SH_LSTRD2            14
+#define OP_MASK_RSTRD2          0x3
+#define OP_SH_RSTRD2            9
+#define OP_MASK_SFT4            0xf
+#define OP_SH_SFT4              22
+#define OP_MASK_XRS             0x7
+#define OP_SH_XRS               23
+#define OP_MASK_OPTN3           0x7
+#define OP_SH_OPTN3             23
+#define OP_MASK_EPTN3           0x7
+#define OP_SH_EPTN3             18
+#define OP_MASK_PTN             0x3
+#define OP_SH_PTN               19
+
+/* S32M2I S32I2M XRA */
+#define OP_MASK_RA              0x1f
+#define OP_SH_RA                6
+
+/* register rb(rs) rc(rt) s12[11:2] s8[7:0] s10[9:1]*/
+/*
+#define OP_MASK_RB              OP_MASK_RS
+#define OP_SH_RB                OP_SH_RS
+#define OP_MASK_RC              OP_MASK_RT
+#define OP_SH_RC                OP_SH_RT
+*/
+#define OP_MASK_XIM8            0xff
+#define OP_MASK_XIM10           0x1ff
+#define OP_MASK_XIM12           0x3ff
+#define OP_SH_XIM8              10
+#define OP_SH_XIM10             10
+#define OP_SH_XIM12             10
+
+/**********  END JZ ISA  ***********/
+
 /* This structure holds information for a particular instruction.  */
 
 struct mips_opcode
@@ -726,7 +780,7 @@ static const unsigned int mips_isa_table[] =
 #define INSN_OCTEON2		  0x00000100
 
 /* Masks used for MIPS-defined ASEs.  */
-#define INSN_ASE_MASK		  0x3c00f010
+#define INSN_ASE_MASK		  0x3c00f050
 
 /* DSP ASE */ 
 #define INSN_DSP                  0x00001000
@@ -774,6 +828,8 @@ static const unsigned int mips_isa_table[] =
 #define INSN_LOONGSON_3A          0x00000400
 /* RMI Xlr instruction */
 #define INSN_XLR              	  0x00000020
+/* Ingenic MXU instruction */
+#define INSN_MXU              	  0x00000040
 
 /* MCU (MicroController) ASE */
 #define INSN_MCU		  0x00000010
@@ -1619,6 +1675,43 @@ extern const int bfd_mips16_num_opcodes;
 #define MICROMIPSOP_MASK_RZ		0
 #define MICROMIPSOP_SH_FZ		0
 #define MICROMIPSOP_MASK_FZ		0
+#define MICROMIPSOP_SH_RA		0
+#define MICROMIPSOP_MASK_RA		0
+#define MICROMIPSOP_SH_XRA		0
+#define MICROMIPSOP_MASK_XRA		0
+#define MICROMIPSOP_SH_XRB		0
+#define MICROMIPSOP_MASK_XRB		0
+#define MICROMIPSOP_SH_XRC		0
+#define MICROMIPSOP_MASK_XRC		0
+#define MICROMIPSOP_SH_XRD		0
+#define MICROMIPSOP_MASK_XRD		0
+#define MICROMIPSOP_SH_LPTN2		0
+#define MICROMIPSOP_MASK_LPTN2		0
+#define MICROMIPSOP_SH_SFT4		0
+#define MICROMIPSOP_MASK_SFT4		0
+#define MICROMIPSOP_SH_EPTN3		0
+#define MICROMIPSOP_MASK_EPTN3		0
+#define MICROMIPSOP_SH_RSTRD2		0
+#define MICROMIPSOP_MASK_RSTRD2		0
+#define MICROMIPSOP_SH_XAS		0
+#define MICROMIPSOP_MASK_XAS		0
+#define MICROMIPSOP_SH_XRS		0
+#define MICROMIPSOP_MASK_XRS		0
+#define MICROMIPSOP_SH_OPTN3		0
+#define MICROMIPSOP_MASK_OPTN3		0
+#define MICROMIPSOP_SH_XIM8		0
+#define MICROMIPSOP_MASK_XIM8		0
+#define MICROMIPSOP_SH_XIM10		0
+#define MICROMIPSOP_MASK_XIM10		0
+#define MICROMIPSOP_SH_XIM12		0
+#define MICROMIPSOP_MASK_XIM12		0
+#define MICROMIPSOP_SH_LSTRD2		0
+#define MICROMIPSOP_MASK_LSTRD2		0
+#define MICROMIPSOP_SH_PTN		0
+#define MICROMIPSOP_MASK_PTN		0
+#define MICROMIPSOP_SH_RPTN2		0
+#define MICROMIPSOP_MASK_RPTN2		0
+
 
 /* These are the characters which may appears in the args field of a microMIPS
    instruction.  They appear in the order in which the fields appear
