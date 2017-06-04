@@ -44,6 +44,41 @@
 
 /* FIXME: These should be shared with gdb somehow.  */
 
+/*****  used for JZ special ISA        *****/
+struct args {
+        const char *opt;
+        int value;
+};
+
+const struct args args_opt[] = {
+        {"WW", 0},
+        {"LW", 1},
+        {"HW", 2},
+        {"XW", 3}
+};
+const struct args args_apt[] = {
+        {"AA", 0},
+        {"AS", 1},
+        {"SA", 2},
+        {"SS", 3}
+};
+
+const struct args args_ept[] = {
+       {"ptn0", 0},
+       {"ptn1", 1},
+       {"ptn2", 2},
+       {"ptn3", 3},
+       {"ptn4", 4},
+       {"ptn5", 5},
+       {"ptn6", 6},
+       {"ptn7", 7},
+};
+static const char * const mips_gpr_names_xr[17] = {
+  "xr0",  "xr1",  "xr2",  "xr3",  "xr4",  "xr5",  "xr6",  "xr7",
+  "xr8",  "xr9",  "xr10", "xr11", "xr12", "xr13", "xr14", "xr15",
+  "xr16"
+};
+
 struct mips_cp0sel_name
 {
   unsigned int cp0reg;
@@ -557,14 +592,14 @@ const struct mips_arch_choice mips_arch_choices[] =
      MIPS32 Architecture_ (MIPS Document Number MD00082, Revision 0.95),
      page 1.  */
   { "mips32",	1, bfd_mach_mipsisa32, CPU_MIPS32,
-    ISA_MIPS32 | INSN_SMARTMIPS,
+    ISA_MIPS32 | INSN_SMARTMIPS | INSN_MXU,
     mips_cp0_names_mips3264,
     mips_cp0sel_names_mips3264, ARRAY_SIZE (mips_cp0sel_names_mips3264),
     mips_hwr_names_numeric },
 
   { "mips32r2",	1, bfd_mach_mipsisa32r2, CPU_MIPS32R2,
     (ISA_MIPS32R2 | INSN_SMARTMIPS | INSN_DSP | INSN_DSPR2
-     | INSN_MIPS3D | INSN_MT | INSN_MCU),
+     | INSN_MIPS3D | INSN_MT | INSN_MCU | INSN_MXU),
     mips_cp0_names_mips3264r2,
     mips_cp0sel_names_mips3264r2, ARRAY_SIZE (mips_cp0sel_names_mips3264r2),
     mips_hwr_names_mips3264r2 },
@@ -926,6 +961,34 @@ lookup_mips_cp0sel_name (const struct mips_cp0sel_name *names,
   return NULL;
 }
 
+/****  phrase the JZ special option as (aptn,optn,A,S) ****/
+static void phrase_aptn(char *dst, int delta)
+{
+       int i;
+       for (i = 0; i < 4; i++) {
+               if (delta == args_apt[i].value) {
+                       strcpy(dst, args_apt[i].opt);
+               }
+       }
+}
+static void phrase_optn(char *dst, int delta)
+{
+       int i;
+       for (i = 0; i < 4; i++) {
+               if (delta == args_opt[i].value) {
+                       strcpy(dst, args_opt[i].opt);
+               }
+       }
+}
+static void phrase_eptn(char *dst, int delta)
+{
+       int i;
+       for (i = 0; i < 8; i++) {
+               if (delta == args_ept[i].value) {
+                       strcpy(dst, args_ept[i].opt);
+               }
+       }
+}
 /* Print insn arguments for 32/64-bit code.  */
 
 static void
@@ -938,7 +1001,7 @@ print_insn_args (const char *d,
   const fprintf_ftype infprintf = info->fprintf_func;
   unsigned int lsb, msb, msbd;
   void *is = info->stream;
-  int op;
+  int op, delta;
 
   lsb = 0;
 
@@ -1405,6 +1468,225 @@ print_insn_args (const char *d,
 	case 'Z':
 	  infprintf (is, "$v%d", GET_OP (l, FT));
 	  break;
+
+       /************** JZ SEPCIAL ISA  *****************/
+       case 'm':
+         (*info->fprintf_func) (info->stream, "%s",
+                                mips_gpr_names_xr[(l >> OP_SH_RA) & OP_MASK_RA]);
+         break;
+
+       case '=':
+         for (; *d != '\0'; d++)
+         {
+
+               char tmp[4] = {};
+               switch (*d)
+               {
+                       case ',':
+                               (*info->fprintf_func) (info->stream, "%c", *d);
+                               break;
+                       case 'a':
+                               delta = (l >> OP_SH_LPTN2) & OP_MASK_LPTN2;
+                               phrase_aptn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'e':
+                               delta = (l >> OP_SH_EPTN3) & OP_MASK_EPTN3;
+                               phrase_eptn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'f':
+                               delta = (l >> OP_SH_SFT4) & OP_MASK_SFT4;
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case 'i':
+                               delta = (l >> OP_SH_XIM12) & OP_MASK_XIM12;
+                               delta <<= 2;
+                               /* if the delta < 0 */
+                               if (delta & 0x800) {
+                                       delta |= 0xfffff << 12;
+                               }
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case 'q':
+                               delta = (l >> OP_SH_RPTN2) & OP_MASK_RPTN2;
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case 'o':
+                               delta = (l >> OP_SH_RPTN2) & OP_MASK_RPTN2;
+                               phrase_optn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'p':
+                       case 'P':
+                               delta = (l >> OP_SH_PTN) & OP_MASK_PTN;
+                               phrase_eptn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'r':
+                               delta = (l >> OP_SH_LSTRD2) & OP_MASK_LSTRD2;
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case 'A':
+                               delta = (l >> OP_SH_XAS) & OP_MASK_XAS;
+                               if (delta == 0)
+                                       strcpy(tmp, "A");
+                               else
+                                       strcpy(tmp, "S");
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'B':
+                               delta = (l >> OP_SH_XIM8) & OP_MASK_XIM8;
+                               /* if the delta < 0 */
+                               if (delta & 0x80) {
+                                       delta |= 0xffffff << 8;
+                               }
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case 'U':
+                               delta = (l >> OP_SH_XIM8) & OP_MASK_XIM8;
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case 'E':
+                               delta = (l >> OP_SH_LPTN2) & OP_MASK_LPTN2;
+                               phrase_eptn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'I':
+                               delta = (l >> OP_SH_XIM10) & OP_MASK_XIM10;
+                               delta <<= 1;
+                               /* if the delta < 0 */
+                               if (delta & 0x100) {
+                                       delta |= 0x3fffff << 10;
+                               }
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+
+                       case 'O':
+                               delta = (l >> OP_SH_OPTN3) & OP_MASK_OPTN3;
+                               phrase_eptn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+                       case 'S':
+                               delta = (l >> OP_SH_XRS) & OP_MASK_XRS;
+                               phrase_eptn(tmp, delta);
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               tmp);
+                               break;
+
+                       case 'T':
+                               delta = (l >> OP_SH_RT) & OP_MASK_RT;
+                               (*info->fprintf_func) (info->stream, "%d",
+                                               delta);
+                               break;
+                       case '=':
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               mips_gpr_names_xr[(l >> OP_SH_XRA) & OP_MASK_XRA]);
+                               break;
+                       case 'b':
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               mips_gpr_names_xr[(l >> OP_SH_XRB) & OP_MASK_XRB]);
+                               break;
+                       case 'c':
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               mips_gpr_names_xr[(l >> OP_SH_XRC) & OP_MASK_XRC]);
+                               break;
+                       case 'd':
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               mips_gpr_names_xr[(l >> OP_SH_XRD) & OP_MASK_XRD]);
+                               break;
+                       case 's':
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               mips_gpr_names[(l >> OP_SH_RS) & OP_MASK_RS]);
+                               break;
+                       case 't':
+                               (*info->fprintf_func) (info->stream, "%s",
+                                               mips_gpr_names[(l >> OP_SH_RT) & OP_MASK_RT]);
+                               break;
+
+                       default:
+                               /* xgettext:c-format */
+                               (*info->fprintf_func) (info->stream,
+                                               _("# internal error, undefined modifier(%c)"),
+                                               *d);
+               }
+         }
+         return;
+       case 'y':
+         for (; *d != '\0'; d++)
+         {
+                 switch (*d)
+                 {
+                         case ',':
+                                 (*info->fprintf_func) (info->stream, "%c", *d);
+                                 break;
+                         case 'y':
+                                 (*info->fprintf_func) (info->stream, "%s",
+                                                 mips_gpr_names_xr[(l >> OP_SH_XRB) & OP_MASK_XRB]);
+                                 break;
+                         case 'D':
+                                 (*info->fprintf_func) (info->stream, "%s",
+                                                 mips_gpr_names_xr[(l >> OP_SH_XRC) & OP_MASK_XRC]);
+                                 break;
+                         case 's':
+                                 (*info->fprintf_func) (info->stream, "%s",
+                                                 mips_gpr_names[(l >> OP_SH_RS) & OP_MASK_RS]);
+                                 break;
+                         default:
+                                 /* xgettext:c-format */
+                                 (*info->fprintf_func) (info->stream,
+                                                 _("# internal error, undefined modifier(%c)"),
+                                                 *d);
+                 }
+         }
+         return;
+       case 'n':
+         for (; *d != '\0'; d++)
+         {
+                 switch (*d)
+                 {
+                         case ',':
+                                 (*info->fprintf_func) (info->stream, "%c", *d);
+                                 break;
+                         case 'R':
+                                 delta = (l >> OP_SH_RSTRD2) & OP_MASK_RSTRD2;
+                                 (*info->fprintf_func) (info->stream, "%d",
+                                                 delta);
+                                 break;
+                         case 'n':
+                                 (*info->fprintf_func) (info->stream, "%s",
+                                                 mips_gpr_names[(l >> OP_SH_RD) & OP_MASK_RD]);
+                                 break;
+                         case 's':
+                                 (*info->fprintf_func) (info->stream, "%s",
+                                                 mips_gpr_names[(l >> OP_SH_RS) & OP_MASK_RS]);
+                                 break;
+                         case 't':
+                                 (*info->fprintf_func) (info->stream, "%s",
+                                                 mips_gpr_names[(l >> OP_SH_RT) & OP_MASK_RT]);
+                                 break;
+                         default:
+                                 /* xgettext:c-format */
+                                 (*info->fprintf_func) (info->stream,
+                                                 _("# internal error, undefined modifier(%c)"),
+                                                 *d);
+                 }
+         }
+         return;
 
 	default:
 	  /* xgettext:c-format */
