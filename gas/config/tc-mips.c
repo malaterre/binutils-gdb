@@ -1417,6 +1417,8 @@ enum options
     OPTION_NO_MICROMIPS,
     OPTION_MCU,
     OPTION_NO_MCU,
+    OPTION_MXU,
+    OPTION_NO_MXU,
     OPTION_COMPAT_ARCH_BASE,
     OPTION_M4650,
     OPTION_NO_M4650,
@@ -1527,6 +1529,8 @@ struct option md_longopts[] =
   {"mno-micromips", no_argument, NULL, OPTION_NO_MICROMIPS},
   {"mmcu", no_argument, NULL, OPTION_MCU},
   {"mno-mcu", no_argument, NULL, OPTION_NO_MCU},
+  {"mmxu", no_argument, NULL, OPTION_MXU},
+  {"mno-mxu", no_argument, NULL, OPTION_NO_MXU},
   {"mvirt", no_argument, NULL, OPTION_VIRT},
   {"mno-virt", no_argument, NULL, OPTION_NO_VIRT},
   {"mmsa", no_argument, NULL, OPTION_MSA},
@@ -1669,6 +1673,11 @@ static const struct mips_ase mips_ases[] = {
 
   { "mcu", ASE_MCU, 0,
     OPTION_MCU, OPTION_NO_MCU,
+     2,  2,  2,  2,
+    -1 },
+
+  { "mxu", ASE_MXU, 0,
+    OPTION_MXU, OPTION_NO_MXU,
      2,  2,  2,  2,
     -1 },
 
@@ -2490,7 +2499,7 @@ struct regname {
 };
 
 #define RNUM_MASK	0x00000ff
-#define RTYPE_MASK	0x0ffff00
+#define RTYPE_MASK	0x1ffff00
 #define RTYPE_NUM	0x0000100
 #define RTYPE_FPU	0x0000200
 #define RTYPE_FCC	0x0000400
@@ -2507,6 +2516,7 @@ struct regname {
 #define RTYPE_R5900_R	0x0200000
 #define RTYPE_R5900_ACC	0x0400000
 #define RTYPE_MSA	0x0800000
+#define RTYPE_JZ	0x1000000
 #define RWARN		0x8000000
 
 #define GENERIC_REGISTER_NUMBERS \
@@ -2711,6 +2721,25 @@ struct regname {
     {"$ac2",	RTYPE_ACC | 2}, \
     {"$ac3",	RTYPE_ACC | 3}
 
+#define MIPS32_JZ_REGISTER_NAMES \
+    {"xr0",    RTYPE_JZ | 0},  \
+    {"xr1",    RTYPE_JZ | 1},  \
+    {"xr2",    RTYPE_JZ | 2},  \
+    {"xr3",    RTYPE_JZ | 3},  \
+    {"xr4",    RTYPE_JZ | 4},  \
+    {"xr5",    RTYPE_JZ | 5},  \
+    {"xr6",    RTYPE_JZ | 6},  \
+    {"xr7",    RTYPE_JZ | 7},  \
+    {"xr8",    RTYPE_JZ | 8},  \
+    {"xr9",    RTYPE_JZ | 9},  \
+    {"xr10",   RTYPE_JZ | 10}, \
+    {"xr11",   RTYPE_JZ | 11}, \
+    {"xr12",   RTYPE_JZ | 12}, \
+    {"xr13",   RTYPE_JZ | 13}, \
+    {"xr14",   RTYPE_JZ | 14}, \
+    {"xr15",   RTYPE_JZ | 15}, \
+    {"xr16",   RTYPE_JZ | 16}
+
 static const struct regname reg_names[] = {
   GENERIC_REGISTER_NUMBERS,
   FPU_REGISTER_NAMES,
@@ -2730,6 +2759,7 @@ static const struct regname reg_names[] = {
   R5900_R_NAMES,
   R5900_ACC_NAMES,
   MIPS_DSP_ACCUMULATOR_NAMES,
+  MIPS32_JZ_REGISTER_NAMES,
   {0, 0}
 };
 
@@ -17914,6 +17944,8 @@ mips_convert_ase_flags (int ase)
     ext_ases |= AFL_ASE_EVA;
   if (ase & ASE_MCU)
     ext_ases |= AFL_ASE_MCU;
+  if (ase & ASE_MXU)
+    ext_ases |= AFL_ASE_MXU;
   if (ase & ASE_MDMX)
     ext_ases |= AFL_ASE_MDMX;
   if (ase & ASE_MIPS3D)
@@ -18916,6 +18948,9 @@ MIPS options:\n\
 -mmcu			generate MCU instructions\n\
 -mno-mcu		do not generate MCU instructions\n"));
   fprintf (stream, _("\
+-mmxu			generate MXU instructions\n\
+-mno-mxu		do not generate MXU instructions\n"));
+  fprintf (stream, _("\
 -mmsa			generate MSA instructions\n\
 -mno-msa		do not generate MSA instructions\n"));
   fprintf (stream, _("\
@@ -18927,6 +18962,9 @@ MIPS options:\n\
   fprintf (stream, _("\
 -minsn32		only generate 32-bit microMIPS instructions\n\
 -mno-insn32		generate all microMIPS instructions\n"));
+  fprintf (stream, _("\
+-mmxu			generate MXU instructions\n\
+-mno-mxu		do not generate MXU instructions\n"));
   fprintf (stream, _("\
 -mfix-loongson2f-jump	work around Loongson2F JUMP instructions\n\
 -mfix-loongson2f-nop	work around Loongson2F NOP errata\n\

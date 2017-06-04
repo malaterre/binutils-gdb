@@ -394,6 +394,9 @@ decode_mips_operand (const char *p)
 /* eXtended Physical Address (XPA) support.  */
 #define XPA     ASE_XPA
 
+/* Ingenic MXU ASE support.  */
+#define MXU	INSN_MXU
+
 /* The order of overloaded instructions matters.  Label arguments and
    register arguments look the same. Instructions that can have either
    for arguments must apear in the correct order in this table for the
@@ -3137,6 +3140,9 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"ctcmsa",		"+l,d",		0x783e0019, 0xffff003f,	RD_2|CM,		0,		0,		MSA,	0 },
 {"cfcmsa",		"+k,+n",	0x787e0019, 0xffff003f,	WR_1|CM,		0,		0,		MSA,	0 },
 {"move.v",		"+d,+e",	0x78be0019, 0xffff003f,	WR_1|RD_2,		0,		0,		MSA,	0 },
+
+/********************** JS SPECIAL ISA  ********************************/
+#include "mxu-opc.c"
 
 /* User Defined Instruction.  */
 {"udi0",		"s,t,d,+1",	0x70000010, 0xfc00003f,	UDI,			0,		I33,		0,	0 },
